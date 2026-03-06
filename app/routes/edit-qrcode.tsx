@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useLoaderData, Form, useNavigate, useActionData, redirect, useSubmit } from "react-router";
+import { useLoaderData, Form, useNavigate, redirect, useSearchParams } from "react-router";
 import {
   Upload,
   Plus,
@@ -20,86 +20,105 @@ import { requireUser } from "~/.server/auth";
 import DashboardLayout from "~/components/DashboardLayout";
 import PhonePreview from "~/components/shared/PhonePreview";
 import { socialOptions } from "~/components/shared/SocialIcons";
-import { createQRCode, getUserThemes, getUserById, createNotification, getUserNotifications } from "~/services";
-import { type PhoneInput, type QRCodeFormData as FormData } from "~/types";
+import { getQRCodeById, updateQRCode, getUserThemes, getUserById, getUserNotifications, createNotification } from "~/services";
+import { type ThemeData as Theme, type PhoneInput, type QRCodeFormData as FormData } from "~/types";
+import { QRCodeSVG } from "qrcode.react";
 
-export async function loader({ request }: { request: Request }) {
+export async function loader({ params, request }: { params: any; request: Request }) {
   const userId = await requireUser(request);
   const themes = await getUserThemes(userId);
   const user = await getUserById(userId);
+  const qrcode = await getQRCodeById(parseInt(params.id), userId);
+
+  if (!qrcode || qrcode.user_id !== userId) {
+    throw new Response("Not Found", { status: 404 });
+  }
+
   const notifications = await getUserNotifications(userId);
-  return { themes, user, notifications };
+  return { themes, qrcode, user, notifications };
 }
 
-export async function action({ request }: { request: Request }) {
+export async function action({ params, request }: { params: any; request: Request }) {
   const userId = await requireUser(request);
   const formData = await request.formData();
   const _action = formData.get("_action");
-  if (_action !== "create_qrcode") return null;
+  if (_action !== "update_qrcode") return null;
 
   const name = formData.get("name") as string;
   const surname = formData.get("surname") as string;
   const title = formData.get("title") as string;
   const social = formData.get("social_network") as string;
   const themeId = formData.get("theme_id") as string;
+  const status = formData.get("status") as string;
   const profileImage = formData.get("profile_image_data") as string;
   const phones = formData.getAll("phones[]") as string[];
   const emails = formData.getAll("emails[]") as string[];
 
-  const qrId = await createQRCode({
-    user_id: userId,
+  await updateQRCode(parseInt(params.id), userId, {
     name,
     surname,
     title,
+    status,
     email: emails[0] || "",
     profile_image: profileImage,
     social_network: social,
     theme_id: parseInt(themeId),
-    status: "draft",
     phones,
   });
 
   await createNotification({
     user_id: userId,
-    title: "QR Code Drafted",
-    message: `Draft created for "${name} ${surname}".`,
+    title: "QR Code Updated",
+    message: `Changes to "${name} ${surname}" have been saved.`,
     type: "info"
   });
 
-  return { success: true, qrId };
+  return { success: true };
 }
 
-export default function CreateQRCode() {
-  const { themes, user, notifications } = useLoaderData<any>();
-  const [step, setStep] = useState<number>(1);
-  const [profileImage, setProfileImage] = useState<string | null>(null);
-  const [phoneInputs, setPhoneInputs] = useState<PhoneInput[]>([{ id: 1, value: "" }]);
-  const [emailInputs, setEmailInputs] = useState<string[]>([""]);
+// socialOptions imported from ~/components/shared/SocialIcons
+
+export default function EditQRCode() {
+  const { themes, qrcode, user, notifications } = useLoaderData<any>();
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const [step, setStep] = useState<number>(searchParams.get("step") === "2" ? 2 : 1);
+  const [profileImage, setProfileImage] = useState<string | null>(qrcode.profile_image);
+  const [phoneInputs, setPhoneInputs] = useState<PhoneInput[]>(
+    qrcode.phones.length > 0
+      ? qrcode.phones.map((p: any) => ({ id: p.id, value: p.phone }))
+      : [{ id: 1, value: "" }]
+  );
+  const [emailInputs, setEmailInputs] = useState<string[]>(
+    qrcode.email ? [qrcode.email] : [""]
+  );
   const [selectedSocial, setSelectedSocial] = useState<string>("Instagram");
   const [error, setError] = useState<string | null>(null);
 
-  const actionData = useActionData<any>();
-  const navigate = useNavigate();
+  // Parse initial social network
+  const getInitialSocialLinks = () => {
+    try {
+      if (qrcode.social_network && (qrcode.social_network.startsWith('{') || qrcode.social_network.startsWith('['))) {
+        return JSON.parse(qrcode.social_network);
+      } else if (qrcode.social_network) {
+        return { "Website": qrcode.social_network };
+      }
+    } catch (e) { }
+    return {};
+  };
 
-  useEffect(() => {
-    if (actionData?.success) {
-      setStep(3);
-    }
-  }, [actionData]);
-
-  const submit = useSubmit();
-
-  const [formData, setFormData] = useState<FormData>({
-    name: "",
-    surname: "",
-    title: "",
-    email: "",
-    social_network: "{}",
-    theme_id: themes[0]?.id || "",
-  });
-
-  const [socialLinks, setSocialLinks] = useState<Record<string, string>>({});
+  const [socialLinks, setSocialLinks] = useState<Record<string, string>>(getInitialSocialLinks());
   const [currentSocialValue, setCurrentSocialValue] = useState("");
+
+  const [formData, setFormData] = useState<FormData & { status: string }>({
+    name: qrcode.name || "",
+    surname: qrcode.surname || "",
+    title: qrcode.title || "",
+    email: qrcode.email || "",
+    social_network: qrcode.social_network || "{}",
+    theme_id: qrcode.theme_id || (themes[0]?.id || ""),
+    status: qrcode.status || "draft",
+  });
 
   useEffect(() => {
     setFormData(prev => ({ ...prev, social_network: JSON.stringify(socialLinks) }));
@@ -136,14 +155,14 @@ export default function CreateQRCode() {
 
   return (
     <DashboardLayout
-      title="Create QR Code"
-      subtitle="Build your digital identity"
+      title="Edit QR Code"
+      subtitle="Update your digital assets"
       user={user as any}
       notifications={notifications}
     >
       <div className="flex flex-col lg:flex-row gap-8 items-start">
         {/* Left Content (3/4) */}
-        <div className="lg:w-3/4">
+        <div className="lg:w-3/4 pb-20">
           <div className="flex items-center justify-between mb-8">
             <div className="flex items-center gap-3">
               <div
@@ -160,11 +179,13 @@ export default function CreateQRCode() {
             </div>
 
             <div className="flex items-center gap-2">
-              {step === 2 && (
-                <button type="button" onClick={() => setStep(1)} className="btn btn-ghost font-bold">
-                  Back
-                </button>
-              )}
+              <button
+                type="button"
+                onClick={() => step === 2 ? setStep(1) : navigate(-1)}
+                className="btn btn-ghost font-bold"
+              >
+                {step === 2 ? "Back" : "Cancel"}
+              </button>
 
               {step === 1 ? (
                 <button
@@ -174,23 +195,23 @@ export default function CreateQRCode() {
                 >
                   Continue
                 </button>
-              ) : step === 2 ? (
+              ) : (
                 <button
-                  form="create-form"
+                  form="edit-form"
                   type="submit"
                   name="_action"
-                  value="create_qrcode"
+                  value="update_qrcode"
                   className="btn-army px-6"
                 >
                   <Check className="w-4 h-4" />
-                  Publish QR Code
+                  {formData.status === "published" ? "Publish Changes" : "Save Draft"}
                 </button>
-              ) : null}
+              )}
             </div>
           </div>
 
           <Form
-            id="create-form"
+            id="edit-form"
             method="post"
             className="space-y-6"
             onKeyDown={(e) => {
@@ -221,11 +242,10 @@ export default function CreateQRCode() {
             {step === 1 ? (
               <div className="space-y-6">
                 {error && (
-                  <div className="alert alert-error font-bold rounded-lg text- t">
+                  <div className="alert alert-error font-bold rounded-lg text-sm">
                     <AlertCircle className="w-4 h-4" /> {error}
                   </div>
                 )}
-
 
                 {/* Section: Select Theme */}
                 <section className="bg-base-100 border border-base-300 rounded-lg overflow-hidden shadow-sm">
@@ -269,7 +289,7 @@ export default function CreateQRCode() {
                     <h3 className="font-bold text-base-content">Personal Details</h3>
                   </div>
 
-                  <div className="p-6 space-y-3">
+                  <div className="p-6 space-y-6">
                     {/* Photo Upload */}
                     <div className="flex items-center gap-6">
                       <div className="relative shrink-0">
@@ -335,6 +355,8 @@ export default function CreateQRCode() {
                         onChange={(e) => setFormData({ ...formData, title: e.target.value })}
                       />
                     </div>
+
+                    <div className="divider">Contact Info</div>
 
                     {/* Dynamic Phones */}
                     <div className="space-y-2">
@@ -522,44 +544,66 @@ export default function CreateQRCode() {
                         })}
                       </div>
                     )}
-
-                    <input type="hidden" name="social_network" value={formData.social_network} />
                   </div>
                 </section>
               </div>
-            ) : step === 2 ? (
+            ) : (
               <div className="max-w-md mx-auto space-y-6">
                 <div className="bg-base-100 border border-base-300 rounded-lg p-10 flex flex-col items-center text-center shadow-lg">
                   <div className="w-16 h-16 rounded-lg flex items-center justify-center mb-4 shadow-sm" style={{ backgroundColor: `${primaryColor}15` }}>
                     <QrCode className="w-8 h-8" style={{ color: primaryColor }} />
                   </div>
                   <h3 className="font-bold text-xl mb-1 text-base-content">QR Code Preview</h3>
-                  <p className="text-sm text-base-content/50 font-medium mb-8">Review your digital card before publishing</p>
+                  <p className="text-sm text-base-content/50 font-medium mb-8">Review your digital card before saving</p>
 
-                  <div className="bg-white p-6 rounded-lg shadow-inner mb-8 border border-base-300">
-                    <div className="w-44 h-44 flex items-center justify-center bg-base-100 rounded">
-                      <QrCode className="w-20 h-20 opacity-20" />
-                    </div>
+                  <div className="bg-white p-6 rounded-lg shadow-inner mb-8 border" style={{ borderColor: `${primaryColor}20` }}>
+                    {qrcode.unique_id && (
+                      <ClientOnlyQRCode
+                        uniqueId={qrcode.unique_id}
+                        themeColor={primaryColor}
+                      />
+                    )}
                   </div>
 
-                  <p className="text-sm text-base-content/70 italic">
-                    Images and links will be active after you publish.
-                  </p>
+                  <div className="flex flex-col gap-2 w-full">
+                    <button
+                      type="button"
+                      onClick={() => copyPublicLink(qrcode.unique_id)}
+                      className="btn btn-ghost bg-base-200 border border-base-300 h-14 rounded-lg flex flex-col items-center justify-center p-0"
+                    >
+                      <span className="text-[10px] font-bold text-base-content/40 uppercase">Live Access URL</span>
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-base-content">{qrcode.unique_id}.armyqr.com</span>
+                        <Copy className="w-4 h-4 text-base-content/40" />
+                      </div>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => downloadQRCode(qrcode.unique_id, formData.name)}
+                      className="btn btn-ghost border border-base-300 h-14 rounded-lg flex items-center justify-center gap-2"
+                    >
+                      <Download className="w-5 h-5" />
+                      <span className="font-bold">Download PNG</span>
+                    </button>
+                  </div>
+
+                  <div className="w-full mt-6 flex items-center justify-between p-4 bg-base-200 border border-base-300 rounded-lg">
+                    <div className="text-left">
+                      <p className="font-bold text-base-content">QR Code Status</p>
+                      <p className="text-xs text-base-content/60">Must be active to be scannable.</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-bold text-base-content/60">{formData.status === 'published' ? 'Active' : 'Draft'}</span>
+                      <input
+                        type="checkbox"
+                        className="toggle toggle-success"
+                        checked={formData.status === "published"}
+                        onChange={(e) => setFormData({ ...formData, status: e.target.checked ? "published" : "draft" })}
+                      />
+                      <input type="hidden" name="status" value={formData.status} />
+                    </div>
+                  </div>
                 </div>
-              </div>
-            ) : (
-              <div className="max-w-md mx-auto space-y-6">
-                <div className="alert alert-success font-bold rounded-lg shadow-sm">
-                  <Check className="w-5 h-5" />
-                  QR Code Successfully Created! Redirecting to Dashboard...
-                </div>
-                <button
-                  type="button"
-                  onClick={() => navigate('/dashboard')}
-                  className="btn btn-army w-full rounded-lg"
-                >
-                  Return to Dashboard
-                </button>
               </div>
             )}
           </Form>
@@ -584,4 +628,64 @@ export default function CreateQRCode() {
       </div>
     </DashboardLayout>
   );
+}
+
+function ClientOnlyQRCode({ uniqueId, themeColor }: { uniqueId: string, themeColor: string }) {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!mounted) {
+    return (
+      <div className="w-44 h-44 flex items-center justify-center">
+        <span className="loading loading-spinner loading-lg" style={{ color: themeColor }}></span>
+      </div>
+    );
+  }
+
+  return (
+    <QRCodeSVG
+      value={`${window.location.origin}/public-card/${uniqueId}`}
+      size={180}
+      bgColor="#FFFFFF"
+      fgColor={themeColor}
+      level="H"
+      includeMargin={false}
+    />
+  );
+}
+
+function copyPublicLink(uniqueId: string) {
+  if (typeof window !== 'undefined') {
+    navigator.clipboard.writeText(`${window.location.origin}/public-card/${uniqueId}`);
+  }
+}
+
+function downloadQRCode(uniqueId: string, name: string) {
+  const svg = document.querySelector('svg');
+  if (!svg) return;
+
+  const svgData = new XMLSerializer().serializeToString(svg);
+  const canvas = document.createElement("canvas");
+  const ctx = canvas.getContext("2d");
+  const img = new Image();
+
+  img.onload = () => {
+    canvas.width = img.width * 4;
+    canvas.height = img.height * 4;
+    if (ctx) {
+      ctx.fillStyle = "white";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      const pngFile = canvas.toDataURL("image/png");
+      const downloadLink = document.createElement("a");
+      downloadLink.download = `QR-${name.replace(/\s+/g, '-')}.png`;
+      downloadLink.href = pngFile;
+      downloadLink.click();
+    }
+  };
+
+  img.src = "data:image/svg+xml;base64," + btoa(unescape(encodeURIComponent(svgData)));
 }

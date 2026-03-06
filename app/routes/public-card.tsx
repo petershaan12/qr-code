@@ -1,118 +1,270 @@
+import { useState, useEffect } from "react";
 import { useLoaderData } from "react-router";
-import { User, Phone, Mail, Globe, Plus, QrCode as QrCodeIcon, Copy, Share2, Download } from "lucide-react";
-import { getDb } from "~/.server/db";
+import {
+    User,
+    Phone,
+    Mail,
+    Globe,
+    Plus,
+    QrCode as QrCodeIcon,
+} from "lucide-react";
+import { socialOptions } from "~/components/shared/SocialIcons";
+import { getQRCodeByUniqueId, incrementScans } from "~/services";
 import type { Route } from "./+types/public-card";
 
 export async function loader({ params }: Route.LoaderArgs) {
-    const db = getDb();
-    const [qrcodes]: any = await db.query(`
-    SELECT q.*, t.primary_color, t.legal_info
-    FROM qrcodes q
-    LEFT JOIN themes t ON q.theme_id = t.id
-    WHERE q.id = ?
-  `, [params.id]);
+    if (!params.id) throw new Response("Not Found", { status: 404 });
 
-    if (qrcodes.length === 0) {
+    const data = await getQRCodeByUniqueId(params.id);
+
+    if (!data) {
         throw new Response("Not Found", { status: 404 });
     }
 
-    const [phones]: any = await db.query("SELECT phone as value FROM qrcode_phones WHERE qrcode_id = ?", [params.id]);
+    await incrementScans(params.id);
 
-    await db.query("UPDATE qrcodes SET scans = scans + 1 WHERE id = ?", [params.id]);
+    return data;
+}
 
-    return { qr: qrcodes[0], phones: phones as Array<{ value: string }> };
+
+
+function generateVCard(qr: any, phones: any[]) {
+    const displayName = `${qr.name || ""} ${qr.surname || ""}`.trim();
+    let vcard = `BEGIN:VCARD\nVERSION:3.0\n`;
+    vcard += `FN:${displayName}\n`;
+    vcard += `N:${qr.surname || ""};${qr.name || ""};;;\n`;
+
+    if (qr.title) {
+        vcard += `TITLE:${qr.title}\n`;
+    }
+
+    phones.forEach((p: any) => {
+        if (p.value) {
+            vcard += `TEL;TYPE=CELL:${p.value}\n`;
+        }
+    });
+
+    if (qr.email) {
+        vcard += `EMAIL:${qr.email}\n`;
+    }
+
+    if (qr.social_network) {
+        try {
+            const social = JSON.parse(qr.social_network);
+            Object.entries(social).forEach(([key, val]) => {
+                if (val) vcard += `URL;TYPE=${key}:${val}\n`;
+            });
+        } catch (e) {
+            vcard += `URL:${qr.social_network}\n`;
+        }
+    }
+
+    if (qr.profile_image && qr.profile_image.startsWith('data:')) {
+        const base64Data = qr.profile_image.split(',')[1];
+        if (base64Data) {
+            vcard += `PHOTO;ENCODING=b;TYPE=JPEG:${base64Data}\n`;
+        }
+    }
+
+    vcard += `END:VCARD`;
+    return vcard;
+}
+
+function downloadVCard(qr: any, phones: any[]) {
+    const vcard = generateVCard(qr, phones);
+    const blob = new Blob([vcard], { type: 'text/vcard;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    const displayName = `${qr.name || ""} ${qr.surname || ""}`.trim();
+    link.href = url;
+    link.download = `${displayName.replace(/\s+/g, '_')}.vcf`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
 }
 
 export default function PublicCard() {
-    const { qr, phones } = useLoaderData<typeof loader>();
+    const { qr, phones } = useLoaderData<any>();
+    const [showSplash, setShowSplash] = useState(qr.enable_welcome !== 0 && qr.welcome_screen_time > 0);
     const displayName = `${qr.name || ""} ${qr.surname || ""}`.trim();
+    const primaryColor = qr.primary_color || '#DC2626';
+
+    useEffect(() => {
+        if (qr.enable_welcome !== 0 && qr.welcome_screen_time > 0) {
+            const timer = setTimeout(() => {
+                setShowSplash(false);
+            }, qr.welcome_screen_time * 1000);
+            return () => clearTimeout(timer);
+        }
+    }, [qr.welcome_screen_time]);
+
+    let socialLinks: Record<string, string> = {};
+    try {
+        if (qr.social_network && (qr.social_network.startsWith('{') || qr.social_network.startsWith('['))) {
+            socialLinks = JSON.parse(qr.social_network);
+        } else if (qr.social_network) {
+            socialLinks = { "Website": qr.social_network };
+        }
+    } catch (e) {
+        socialLinks = { "Website": qr.social_network || "" };
+    }
+
+    const activeSocialLinks = Object.entries(socialLinks).filter(([_, val]) => val);
+
+    if (showSplash) {
+        return (
+            <div className="min-h-screen bg-gray-100 flex flex-col items-center font-sans" data-theme="light">
+                <div
+                    className={`w-full h-screen max-w-sm flex flex-col items-center justify-center relative overflow-hidden transition-opacity duration-700 ${showSplash ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+                    style={{ backgroundColor: primaryColor }}
+                >
+                    {qr.welcome_image ? (
+                        <div className="relative w-full h-full flex items-center justify-center">
+                            <img
+                                src={qr.welcome_image}
+                                alt="Welcome"
+                                className="w-full h-full object-cover"
+                            />
+                            {/* Subtle overlay for branding if needed */}
+                            <div className="absolute inset-0 bg-black/5" />
+                        </div>
+                    ) : (
+                        <div className="flex flex-col items-center justify-center">
+                            <div className="animate-bounce mb-8">
+                                {qr.profile_image ? (
+                                    <img
+                                        src={qr.profile_image}
+                                        alt="Welcome"
+                                        className="w-32 h-32 rounded-3xl border-4 border-white/30 object-cover shadow-2xl"
+                                    />
+                                ) : (
+                                    <div className="w-32 h-32 rounded-3xl bg-white/20 border-4 border-white/30 flex items-center justify-center shadow-2xl text-white">
+                                        <QrCodeIcon className="w-16 h-16 text-white" />
+                                    </div>
+                                )}
+                            </div>
+                            <p className="text-white/80 font-bold uppercase tracking-widest text-xs drop-shadow-sm">
+                                {displayName}
+                            </p>
+                            <div className="absolute bottom-12">
+                                <div className="loading loading-ring loading-lg opacity-50 text-white"></div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            </div>
+        );
+    }
 
     return (
-        <div className="min-h-screen bg-base-200 flex items-center justify-center p-2 md:p-4">
-            <div className="w-full max-w-sm bg-base-100 rounded-2xl overflow-hidden shadow-xl">
-                <div
-                    className="relative h-48 flex flex-col items-center justify-end pb-4 overflow-hidden"
-                    style={{ background: `linear-gradient(to bottom right, ${qr.primary_color || '#DC2626'}, ${qr.primary_color || '#991B1B'}E6)` }}
-                >
-                    <div className="absolute inset-0 opacity-10">
-                        <div className="absolute top-4 right-4 w-16 h-16 border-2 border-white rounded-full" />
-                        <div className="absolute bottom-6 left-4 w-10 h-10 border-2 border-white rounded-full" />
-                    </div>
+        <div className="min-h-screen bg-gray-100 flex flex-col items-center font-sans" data-theme="light">
+            <div className="w-full h-screen max-w-sm bg-base-100 flex flex-col relative">
+                <div className="flex-1 flex flex-col overflow-y-auto">
 
-                    <div className="relative z-10 mb-2">
+                    {/* Hero Photo — large, no overlay */}
+                    <div className="relative w-full aspect-[4/3] overflow-hidden">
                         {qr.profile_image ? (
-                            <img src={qr.profile_image} className="w-20 h-20 rounded-full border-3 border-white object-cover shadow-lg" />
+                            <img
+                                src={qr.profile_image}
+                                alt={displayName}
+                                className="w-full h-full object-cover"
+                            />
                         ) : (
-                            <div className="w-20 h-20 rounded-full bg-white/20 border-3 border-white flex items-center justify-center shadow-lg">
-                                <User className="w-10 h-10 text-white/70" />
+                            <div className="w-full h-full flex items-center justify-center" style={{ backgroundColor: `${primaryColor}15` }}>
+                                <User className="w-24 h-24" style={{ color: `${primaryColor}40` }} />
                             </div>
                         )}
+                        {/* Subtle gradient at bottom of photo */}
+                        <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-white to-transparent" />
                     </div>
 
-                    <h1 className="relative z-10 text-lg font-bold text-white text-center px-2">{displayName}</h1>
-                    <p className="relative z-10 text-white/90 text-xs mt-0.5">{qr.title}</p>
-                </div>
+                    {/* Name & Title — left aligned */}
+                    <div className="px-6 -mt-2 relative z-10">
+                        <h1 className="text-xl font-bold leading-tight">
+                            {displayName}
+                        </h1>
+                        <p className="text-gray-400 text-lg mt-0" style={{ fontFamily: "'MonteCarlo', cursive", color: primaryColor }}>{qr.title || 'Title'}</p>
+                    </div>
 
-                <div className="px-4 py-4 space-y-3">
-                    <button className="w-full py-2.5 bg-red-600 text-white font-bold rounded-xl flex items-center justify-center gap-2 shadow-md hover:brightness-110 active:scale-95 transition-all text-xs uppercase tracking-wide">
-                        <Plus className="w-3 h-3" strokeWidth={3} />
-                        Save to Contacts
-                    </button>
+                    {/* Add Contact Button — outlined */}
+                    <div className="px-6 mt-5">
+                        <button
+                            onClick={() => downloadVCard(qr, phones)}
+                            className="inline-flex items-center gap-2 px-6 py-2.5 text-white rounded-full font-bold text-sm border-2 transition-all hover:brightness-110 active:scale-95"
+                            style={{ backgroundColor: primaryColor }}
+                        >
+                            <Plus className="w-4 h-4" strokeWidth={3} />
+                            Add Contact
+                        </button>
+                    </div>
 
-                    <div className="space-y-3">
-                        {phones.map((p, i) => (
-                            <div key={i} className="flex items-center gap-3 group">
-                                <div className="w-8 h-8 rounded-lg bg-red-50 flex items-center justify-center border border-red-100 group-hover:bg-red-600 group-hover:text-white transition-colors">
-                                    <Phone className="w-3 h-3" />
+                    {/* Contact Info */}
+                    <div className="px-6 mt-8 space-y-6">
+                        {phones.map((p: any, i: number) => (
+                            <div key={i} className="flex items-start gap-4">
+                                <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0" style={{ color: primaryColor }}>
+                                    <Phone className="w-5 h-5" strokeWidth={2} />
                                 </div>
-                                <a href={`tel:${p.value}`} className="flex-1 text-xs font-medium hover:text-red-600 transition-colors">{p.value}</a>
+                                <div className="flex-1 pt-0.5">
+                                    <p className="text-sm font-bold text-gray-800">Phone</p>
+                                    <a href={`tel:${p.value}`} className="block text-sm text-gray-500 hover:text-gray-800 transition-colors">{p.value}</a>
+                                </div>
                             </div>
                         ))}
 
                         {qr.email && (
-                            <div className="flex items-center gap-3 group">
-                                <div className="w-8 h-8 rounded-lg bg-red-50 flex items-center justify-center border border-red-100 group-hover:bg-red-600 group-hover:text-white transition-colors">
-                                    <Mail className="w-3 h-3" />
+                            <div className="flex items-start gap-4">
+                                <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0" style={{ color: primaryColor }}>
+                                    <Mail className="w-5 h-5" strokeWidth={2} />
                                 </div>
-                                <a href={`mailto:${qr.email}`} className="flex-1 text-xs font-medium hover:text-red-600 transition-colors">{qr.email}</a>
+                                <div className="flex-1 pt-0.5">
+                                    <p className="text-sm font-bold text-gray-800">Email</p>
+                                    <a href={`mailto:${qr.email}`} className="block text-sm text-gray-500 hover:text-gray-800 transition-colors">{qr.email}</a>
+                                </div>
                             </div>
                         )}
 
-                        {qr.social_network && (
-                            <div className="flex items-center gap-3 group">
-                                <div className="w-8 h-8 rounded-lg bg-red-50 flex items-center justify-center border border-red-100 group-hover:bg-red-600 group-hover:text-white transition-colors">
-                                    <Globe className="w-3 h-3" />
+                        {/* Website row in contact info */}
+                        {socialLinks['Website'] && (
+                            <div className="flex items-start gap-4">
+                                <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0" style={{ color: primaryColor }}>
+                                    <Globe className="w-5 h-5" strokeWidth={2} />
                                 </div>
-                                <a href={qr.social_network.startsWith('http') ? qr.social_network : `https://${qr.social_network}`} target="_blank" className="flex-1 text-xs font-medium hover:text-red-600 transition-colors truncate">{qr.social_network}</a>
+                                <div className="flex-1 pt-0.5">
+                                    <p className="text-sm font-bold text-gray-800">Website</p>
+                                    <a href={socialLinks['Website'].startsWith('http') ? socialLinks['Website'] : `https://${socialLinks['Website']}`} target="_blank" rel="noopener noreferrer" className="block text-sm text-gray-500 hover:text-gray-800 transition-colors">{socialLinks['Website'].replace(/^https?:\/\//, '')}</a>
+                                </div>
                             </div>
                         )}
                     </div>
 
-                    <div className="flex justify-center gap-2 pt-2">
-                        <button className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center grayscale hover:grayscale-0 transition-all cursor-pointer text-xs">📸</button>
-                        <button className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center grayscale hover:grayscale-0 transition-all cursor-pointer text-xs">🎵</button>
-                        <button className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center grayscale hover:grayscale-0 transition-all cursor-pointer text-xs">🎬</button>
-                    </div>
 
-                    <div className="pt-3 border-t border-base-200 flex justify-between items-center">
-                        <div className="flex gap-1">
-                            <button className="p-2 rounded-lg hover:bg-base-200 transition-colors">
-                                <Copy className="w-4 h-4" />
-                            </button>
-                            <button className="p-2 rounded-lg hover:bg-base-200 transition-colors">
-                                <Share2 className="w-4 h-4" />
-                            </button>
-                            <button className="p-2 rounded-lg hover:bg-base-200 transition-colors">
-                                <Download className="w-4 h-4" />
-                            </button>
-                        </div>
-                        <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center">
-                            <QrCodeIcon className="w-5 h-5 text-gray-600" />
-                        </div>
-                    </div>
 
-                    <div className="text-center pt-2 border-t border-base-200">
-                        <p className="text-[8px] opacity-50 uppercase font-black tracking-wider">{qr.legal_info}</p>
+                    {/* Spacer to push footer down */}
+                    <div className="flex-1" />
+
+                    {/* Footer — pinned at bottom */}
+                    <div className="text-center py-6">
+                        {/* Social Icons — exclude Website */}
+                        <div className="flex justify-center gap-4 mt-10 mb-4">
+                            {activeSocialLinks.filter(([k]) => k.toLowerCase() !== 'website').map(([key, val], i) => {
+                                const option = socialOptions.find(o => o.name.toLowerCase() === key.toLowerCase());
+                                if (!option) return null;
+                                return (
+                                    <a
+                                        key={i}
+                                        href={val.startsWith('http') ? val : `https://${val}`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="transition-all hover:scale-110 active:scale-95"
+                                    >
+                                        <img src={option.icon} alt={key} className="w-9 h-9 object-contain" />
+                                    </a>
+                                );
+                            })}
+                        </div>
+                        <p className="text-[11px] text-gray-400">{qr.legal_info || "E.g. © YYYY Company Name. All Rights Reserved."}</p>
                     </div>
                 </div>
             </div>

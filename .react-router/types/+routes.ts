@@ -23,6 +23,11 @@ type Pages = {
   "/create-qrcode": {
     params: {};
   };
+  "/edit-qrcode/:id": {
+    params: {
+      "id": string;
+    };
+  };
   "/theme": {
     params: {};
   };
@@ -32,7 +37,7 @@ type Pages = {
   "/account": {
     params: {};
   };
-  "/card/:id": {
+  "/public-card/:id": {
     params: {
       "id": string;
     };
@@ -42,7 +47,7 @@ type Pages = {
 type RouteFiles = {
   "root.tsx": {
     id: "root";
-    page: "/" | "/login" | "/dashboard" | "/create-qrcode" | "/theme" | "/users" | "/account" | "/card/:id";
+    page: "/" | "/login" | "/dashboard" | "/create-qrcode" | "/edit-qrcode/:id" | "/theme" | "/users" | "/account" | "/public-card/:id";
   };
   "routes/login.tsx": {
     id: "routes/login";
@@ -59,6 +64,10 @@ type RouteFiles = {
     id: "routes/create-qrcode";
     page: "/create-qrcode";
   };
+  "routes/edit-qrcode.tsx": {
+    id: "routes/edit-qrcode";
+    page: "/edit-qrcode/:id";
+  };
   "routes/theme.tsx": {
     id: "routes/theme";
     page: "/theme";
@@ -73,7 +82,7 @@ type RouteFiles = {
   };
   "routes/public-card.tsx": {
     id: "routes/public-card";
-    page: "/card/:id";
+    page: "/public-card/:id";
   };
 };
 
@@ -83,6 +92,7 @@ type RouteModules = {
   "login-page": typeof import("./app/routes/login.tsx");
   "routes/dashboard": typeof import("./app/routes/dashboard.tsx");
   "routes/create-qrcode": typeof import("./app/routes/create-qrcode.tsx");
+  "routes/edit-qrcode": typeof import("./app/routes/edit-qrcode.tsx");
   "routes/theme": typeof import("./app/routes/theme.tsx");
   "routes/users": typeof import("./app/routes/users.tsx");
   "routes/account": typeof import("./app/routes/account.tsx");

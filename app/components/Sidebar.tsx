@@ -1,4 +1,3 @@
-import React from "react";
 import { Link, useLocation, Form } from "react-router";
 import {
     QrCode,
@@ -71,8 +70,8 @@ const Sidebar: React.FC = () => {
                                 to={item.path}
                                 onClick={() => { if (window.innerWidth < 1024) toggleSidebar(); }}
                                 className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${isActive(item.path)
-                                        ? "bg-red-600/10 text-red-600 border-l-4 border-red-600 rounded-l-none"
-                                        : "text-base-content/60 hover:bg-base-200 hover:text-base-content"
+                                    ? "bg-red-600/10 text-red-600 border-l-4 border-red-600 rounded-l-none"
+                                    : "text-base-content/60 hover:bg-base-200 hover:text-base-content"
                                     }`}
                             >
                                 <Icon className={`w-4 h-4 shrink-0 ${isActive(item.path) ? "text-red-600" : "text-base-content/40"}`} />

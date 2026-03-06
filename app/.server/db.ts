@@ -60,11 +60,26 @@ export async function initDb() {
       theme_id INT,
       status ENUM('draft', 'published') DEFAULT 'draft',
       scans INT DEFAULT 0,
+      unique_id VARCHAR(50) UNIQUE,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL,
       FOREIGN KEY (theme_id) REFERENCES themes(id) ON DELETE SET NULL
     )
   `);
+
+  // Add unique_id column if it doesn't exist
+  try {
+    await db.query(
+      `ALTER TABLE qrcodes ADD COLUMN unique_id VARCHAR(50) UNIQUE`,
+    );
+  } catch (error) {}
+
+  try {
+    await db.query(
+      `ALTER TABLE qrcodes ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP`,
+    );
+  } catch (error) {}
 
   await db.query(`
     CREATE TABLE IF NOT EXISTS qrcode_phones (
@@ -107,8 +122,8 @@ export async function initDb() {
     );
 
     await db.query(
-      `INSERT INTO qrcodes (user_id, name, surname, title, email, social_network, theme_id, status, scans)
-       VALUES (1, 'John', 'Doe', 'Business Development', 'john@armysecurity.com', 'armysecurityguard.com', 1, 'published', 124)`,
+      `INSERT INTO qrcodes (user_id, name, surname, title, email, social_network, theme_id, status, scans, unique_id)
+       VALUES (1, 'John', 'Doe', 'Business Development', 'john@armysecurity.com', 'armysecurityguard.com', 1, 'published', 124, 'john-doe-123')`,
     );
     await db.query(
       "INSERT INTO qrcode_phones (qrcode_id, phone) VALUES (1, '081902102020')",

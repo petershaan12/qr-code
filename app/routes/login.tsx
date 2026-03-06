@@ -1,7 +1,7 @@
 import { Form, useActionData } from "react-router";
 import { Mail, Lock, LogIn, QrCode, AlertCircle } from "lucide-react";
 import bcrypt from "bcryptjs";
-import { getDb } from "~/.server/db";
+import { findUserByEmail } from "~/services";
 import { createSessionCookie, clearSessionCookie } from "~/.server/auth";
 
 interface ActionData {
@@ -25,11 +25,7 @@ export async function action({ request }: { request: Request }) {
   const email = formData.get("email") as string;
   const password = formData.get("password") as string;
 
-  const db = getDb();
-  const [users] = await db.query("SELECT * FROM users WHERE email = ?", [
-    email,
-  ]);
-  const user = users[0];
+  const user = await findUserByEmail(email);
 
   if (!user || !bcrypt.compareSync(password, user.password)) {
     return { error: "Invalid email or password" };

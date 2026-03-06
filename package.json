@@ -15,9 +15,11 @@
     "isbot": "^5.1.31",
     "lucide-react": "^0.474.0",
     "mysql2": "^3.14.1",
+    "qrcode.react": "^4.2.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-router": "^7.12.0",
+    "uuid": "^13.0.0",
     "zustand": "^5.0.3"
   },
   "devDependencies": {
@@ -28,6 +30,7 @@
     "@types/node": "^25.3.5",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
+    "@types/uuid": "^10.0.0",
     "autoprefixer": "^10.4.20",
     "daisyui": "^5.0.35",
     "tailwindcss": "^4.1.13",
