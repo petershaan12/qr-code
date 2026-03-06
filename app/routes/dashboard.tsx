@@ -17,7 +17,7 @@ import { requireUser } from "~/.server/auth";
 import DashboardLayout from "~/components/DashboardLayout";
 import { getUserQRCodes, deleteQRCode, getUserById, getUserNotifications, markAllNotificationsAsRead } from "~/services";
 import type { Route } from "./+types/dashboard";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import SearchFilter from "~/components/SearchFilter";
 
@@ -53,6 +53,14 @@ export default function Dashboard() {
   const [searchTerm, setSearchTerm] = useState("");
   const [activeFilter, setActiveFilter] = useState("all");
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  const [showToast, setShowToast] = useState(false);
+
+  useEffect(() => {
+    if (showToast) {
+      const timer = setTimeout(() => setShowToast(false), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [showToast]);
 
   const filteredQRCodes = useMemo(() =>
     qrcodes.filter((qr: any) => {
@@ -72,7 +80,9 @@ export default function Dashboard() {
   const toggleSelect = (id: number) => setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
 
   const copyLink = (uniqueId: string) => {
-    navigator.clipboard.writeText(`${window.location.origin}/public-card/${uniqueId}`);
+    navigator.clipboard.writeText(`${window.location.origin}/public-card/${uniqueId}`).then(() => {
+      setShowToast(true);
+    });
   };
 
   const downloadQRCode = (uniqueId: string, name: string) => {
@@ -106,6 +116,15 @@ export default function Dashboard() {
       user={user as any}
       notifications={notifications}
     >
+      {/* Toast Notification */}
+      {showToast && (
+        <div className="toast toast-top toast-center z-[100] animate-in slide-in-from-top duration-300">
+          <div className="alert alert-success shadow-lg border-none bg-success text-white font-bold py-3 px-6 rounded-xl flex items-center gap-2">
+            <Check className="w-5 h-5" />
+            <span>Link copied to clipboard!</span>
+          </div>
+        </div>
+      )}
 
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-6">
         <div className="flex-1 w-full max-w-2xl">
