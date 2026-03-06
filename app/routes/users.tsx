@@ -1,13 +1,20 @@
 import { useState, useMemo, useRef } from "react";
-import { useLoaderData, Form, Link } from "react-router";
+import { useLoaderData, Form, Link, redirect } from "react-router";
 import { Search, Plus, Trash2, Edit, Edit2, User, Shield, ChevronDown, X, Mail, Key, Check, Save } from "lucide-react";
 import { requireUser } from "~/.server/auth";
 import DashboardLayout from "~/components/DashboardLayout";
+import UserModal from "~/components/UserModal";
+import SearchFilter from "~/components/SearchFilter";
 import { getAllUsers, getUserById, deleteUser, createUser, updateUser, getUserNotifications, createNotification } from "~/services";
 
 export async function loader({ request }: { request: Request }) {
     const userId = await requireUser(request);
     const currentUser = await getUserById(userId);
+
+    if (currentUser?.role !== "admin") {
+        return redirect("/dashboard");
+    }
+
     const users = await getAllUsers();
     const notifications = await getUserNotifications(userId);
     return { user: currentUser, users, notifications };
@@ -15,6 +22,12 @@ export async function loader({ request }: { request: Request }) {
 
 export async function action({ request }: { request: Request }) {
     const userId = await requireUser(request);
+    const currentUser = await getUserById(userId);
+
+    if (currentUser?.role !== "admin") {
+        return redirect("/dashboard");
+    }
+
     const formData = await request.formData();
     const _action = formData.get("_action");
 
@@ -68,7 +81,6 @@ export default function Users() {
     const [searchTerm, setSearchTerm] = useState("");
     const [roleFilter, setRoleFilter] = useState("all");
     const modalRef = useRef<HTMLDialogElement>(null);
-    const editModalRef = useRef<HTMLDialogElement>(null);
     const [editingUser, setEditingUser] = useState<any>(null);
 
     const filteredUsers = useMemo(() => users.filter((u: any) => {
@@ -83,7 +95,7 @@ export default function Users() {
 
     const handleEdit = (user: any) => {
         setEditingUser(user);
-        editModalRef.current?.showModal();
+        modalRef.current?.showModal();
     };
 
     return (
@@ -93,32 +105,25 @@ export default function Users() {
             user={user}
             notifications={notifications}
         >
-            <div className="flex flex-col md:flex-row md:items-center gap-3 mb-6">
-                <div className="relative flex-1 group">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-base-content/40 z-10 group-focus-within:text-base-content transition-colors" />
-                    <input
-                        type="text"
-                        className="input input-bordered w-full w-full pl-10"
-                        placeholder="Search users by name or email..."
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-6">
+                <div className="flex-1 w-full max-w-2xl">
+                    <SearchFilter
+                        searchTerm={searchTerm}
+                        setSearchTerm={setSearchTerm}
+                        searchPlaceholder="Search users by name or email..."
+                        filterValue={roleFilter}
+                        setFilterValue={setRoleFilter}
+                        filterLabel="Role"
+                        filterOptions={[
+                            { value: "all", label: "All Users" },
+                            { value: "admin", label: "Admin" },
+                            { value: "user", label: "User" }
+                        ]}
                     />
                 </div>
 
                 <div className="flex items-center gap-2 shrink-0">
-                    <div className="dropdown dropdown-bottom dropdown-end">
-                        <div tabIndex={0} role="button" className="btn btn-ghost border border-base-300 bg-base-100 flex gap-2 font-bold text-base-content/70 hover:border-base-content/20 transition-all">
-                            Role: {roleFilter === "all" ? "All" : roleFilter.charAt(0).toUpperCase() + roleFilter.slice(1)}
-                            <ChevronDown className="w-4 h-4" />
-                        </div>
-                        <ul tabIndex={0} className="dropdown-content z-[20] menu p-2 shadow-xl bg-base-100 border border-base-300 rounded-lg w-44 mt-2">
-                            <li><button onClick={() => setRoleFilter("all")}>All Users</button></li>
-                            <li><button onClick={() => setRoleFilter("admin")}>Admin</button></li>
-                            <li><button onClick={() => setRoleFilter("user")}>User</button></li>
-                        </ul>
-                    </div>
-
-                    <button onClick={() => modalRef.current?.showModal()} className="btn-army">
+                    <button onClick={() => { setEditingUser(null); modalRef.current?.showModal(); }} className="btn-army">
                         <Plus className="w-4 h-4" />
                         Add User
                     </button>
@@ -206,143 +211,10 @@ export default function Users() {
                 )}
             </div>
 
-            {/* Add User Modal */}
-            <dialog ref={modalRef} className="modal modal-bottom sm:modal-middle">
-                <div className="modal-box p-0 overflow-hidden border border-base-300 shadow-2xl rounded-lg bg-base-100">
-                    <div className="px-6 py-4 border-b border-base-200 flex items-center justify-between bg-base-200/50">
-                        <h3 className="font-bold text-lg">Add New User</h3>
-                        <form method="dialog">
-                            <button className="btn btn-ghost btn-sm btn-circle"><X className="w-4 h-4" /></button>
-                        </form>
-                    </div>
-
-                    <Form method="post" onSubmit={() => modalRef.current?.close()} className="px-6 pb-6 space-y-4">
-                        <div className="form-control">
-                            <label className="label py-1">
-                                <span className="label-text font-bold text-base-content/70">Full Name</span>
-                            </label>
-                            <div className="input input-bordered w-full flex items-center gap-3">
-                                <User className="w-4 h-4 text-base-content/30" />
-                                <input name="name" type="text" className="grow font-medium" placeholder="E.g. John Doe" required />
-                            </div>
-                        </div>
-
-                        <div className="form-control">
-                            <label className="label py-1">
-                                <span className="label-text font-bold text-base-content/70">Email Address</span>
-                            </label>
-                            <div className="input input-bordered w-full flex items-center gap-3">
-                                <Mail className="w-4 h-4 text-base-content/30" />
-                                <input name="email" type="email" className="grow font-medium" placeholder="john@example.com" required />
-                            </div>
-                        </div>
-
-                        <div className="form-control">
-                            <label className="label py-1">
-                                <span className="label-text font-bold text-base-content/70">Password</span>
-                            </label>
-                            <div className="input input-bordered w-full flex items-center gap-3">
-                                <Key className="w-4 h-4 text-base-content/30" />
-                                <input name="password" type="password" className="grow font-medium" placeholder="••••••••" required />
-                            </div>
-                        </div>
-
-                        <div className="form-control">
-                            <label className="label py-1">
-                                <span className="label-text font-bold text-base-content/70">Role</span>
-                            </label>
-                            <select name="role" className="select select-bordered font-medium w-full flex">
-                                <option value="user">Standard User</option>
-                                <option value="admin">Administrator</option>
-                            </select>
-                        </div>
-
-                        <div className="modal-action pt-2">
-                            <form method="dialog">
-                                <button className="btn btn-ghost font-bold">Cancel</button>
-                            </form>
-                            <button type="submit" name="_action" value="create" className="btn-army px-6">
-                                <Check className="w-4 h-4" />
-                                Create User
-                            </button>
-                        </div>
-                    </Form>
-                </div>
-                <form method="dialog" className="modal-backdrop bg-base-content/20 backdrop-blur-[2px]">
-                    <button>close</button>
-                </form>
-            </dialog>
-
-            {/* Edit User Modal */}
-            <dialog ref={editModalRef} className="modal modal-bottom sm:modal-middle">
-                <div className="modal-box p-0 overflow-hidden border border-base-300 shadow-2xl rounded-lg bg-base-100">
-                    <div className="px-6 py-4 border-b border-base-200 flex items-center justify-between bg-base-200/50">
-                        <div className="flex items-center gap-2">
-                            <Edit className="w-4 h-4 text-primary" />
-                            <h3 className="font-bold text-lg">Edit User</h3>
-                        </div>
-                        <form method="dialog">
-                            <button className="btn btn-ghost btn-sm btn-circle"><X className="w-4 h-4" /></button>
-                        </form>
-                    </div>
-
-                    <Form method="post" onSubmit={() => editModalRef.current?.close()} className="px-6 pb-6 space-y-4">
-                        <input type="hidden" name="id" value={editingUser?.id} />
-                        <div className="form-control">
-                            <label className="label py-1">
-                                <span className="label-text font-bold text-base-content/70">Full Name</span>
-                            </label>
-                            <div className="input input-bordered w-full flex items-center gap-3">
-                                <User className="w-4 h-4 text-base-content/30" />
-                                <input name="name" type="text" className="grow font-medium" defaultValue={editingUser?.name} required />
-                            </div>
-                        </div>
-
-                        <div className="form-control">
-                            <label className="label py-1">
-                                <span className="label-text font-bold text-base-content/70">Email Address</span>
-                            </label>
-                            <div className="input input-bordered w-full flex items-center gap-3">
-                                <Mail className="w-4 h-4 text-base-content/30" />
-                                <input name="email" type="email" className="grow font-medium" defaultValue={editingUser?.email} required />
-                            </div>
-                        </div>
-
-                        <div className="form-control">
-                            <label className="label py-1">
-                                <span className="label-text font-bold text-base-content/70">New Password (Optional)</span>
-                            </label>
-                            <div className="input input-bordered w-full flex items-center gap-3">
-                                <Key className="w-4 h-4 text-base-content/30" />
-                                <input name="password" type="password" className="grow font-medium" placeholder="Leave blank to keep current" />
-                            </div>
-                        </div>
-
-                        <div className="form-control">
-                            <label className="label py-1">
-                                <span className="label-text font-bold text-base-content/70">Role</span>
-                            </label>
-                            <select name="role" className="select select-bordered font-medium w-full flex" defaultValue={editingUser?.role}>
-                                <option value="user">Standard User</option>
-                                <option value="admin">Administrator</option>
-                            </select>
-                        </div>
-
-                        <div className="modal-action pt-2">
-                            <form method="dialog">
-                                <button className="btn btn-ghost font-bold">Cancel</button>
-                            </form>
-                            <button type="submit" name="_action" value="update" className="btn-army px-6 gap-2">
-                                <Save className="w-4 h-4" />
-                                Save Changes
-                            </button>
-                        </div>
-                    </Form>
-                </div>
-                <form method="dialog" className="modal-backdrop bg-base-content/20 backdrop-blur-[2px]">
-                    <button>close</button>
-                </form>
-            </dialog>
+            <UserModal
+                modalRef={modalRef}
+                editingUser={editingUser}
+            />
         </DashboardLayout>
     );
 }

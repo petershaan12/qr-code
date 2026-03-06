@@ -19,7 +19,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, title, subt
 
     return (
         <div className="flex h-screen bg-base-200">
-            <Sidebar />
+            <Sidebar user={user} />
 
             <div className="flex-1 flex flex-col overflow-hidden">
                 <header className="bg-base-100 border-b border-base-300 px-4 md:px-8 py-3 flex items-center justify-between shrink-0">

@@ -44,11 +44,11 @@ export default function Login() {
   const actionData = useActionData<ActionData>();
 
   return (
-    <div className="min-h-screen w-full flex items-center justify-center bg-gradient-to-br from-gray-50 via-red-50 to-gray-100 p-4">
+    <div className="min-h-screen w-full flex items-center justify-center bg-base-200 p-4">
       <div className="relative w-full max-w-md">
         <div className="bg-base-100 rounded-2xl shadow-xl border border-base-300 p-8">
           <div className="text-center mb-8">
-            <div className="w-14 h-14 bg-red-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg shadow-red-200">
+            <div className="w-14 h-14 bg-red-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg">
               <QrCode className="w-7 h-7 text-white" strokeWidth={2} />
             </div>
             <h1 className="text-2xl font-bold text-base-content">

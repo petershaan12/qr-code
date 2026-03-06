@@ -19,6 +19,7 @@ import { getUserQRCodes, deleteQRCode, getUserById, getUserNotifications, markAl
 import type { Route } from "./+types/dashboard";
 import { useState, useMemo } from "react";
 import { QRCodeSVG } from "qrcode.react";
+import SearchFilter from "~/components/SearchFilter";
 
 export async function loader({ request }: Route.LoaderArgs) {
   const userId = await requireUser(request);
@@ -106,31 +107,21 @@ export default function Dashboard() {
       notifications={notifications}
     >
 
-      {/* Search & Filter Bar */}
-      <div className="flex flex-col md:flex-row md:items-center gap-3 mb-6">
-        <div className="relative flex-1 group">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-base-content/40 z-10 group-focus-within:text-base-content transition-colors" />
-          <input
-            type="text"
-            className="input input-bordered w-full pl-10"
-            placeholder="Search by name, title or identifier..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-6">
+        <div className="flex-1 w-full max-w-2xl">
+          <SearchFilter
+            searchTerm={searchTerm}
+            setSearchTerm={setSearchTerm}
+            searchPlaceholder="Search by name, title or identifier..."
+            filterValue={activeFilter}
+            setFilterValue={setActiveFilter}
+            filterLabel="Status"
+            filterOptions={[
+              { value: "all", label: "All Assets" },
+              { value: "published", label: "Published" },
+              { value: "draft", label: "Drafts" }
+            ]}
           />
-        </div>
-
-        <div className="flex items-center gap-2 shrink-0">
-          <div className="dropdown dropdown-bottom dropdown-end">
-            <div tabIndex={0} role="button" className="btn btn-ghost border border-base-300 bg-base-100 flex gap-2 font-bold text-base-content/70 hover:border-base-content/20 transition-all">
-              Status: {activeFilter === "all" ? "All" : activeFilter.charAt(0).toUpperCase() + activeFilter.slice(1)}
-              <ChevronDown className="w-4 h-4" />
-            </div>
-            <ul tabIndex={0} className="dropdown-content z-[20] menu p-2 shadow-xl bg-base-100 border border-base-300 rounded-lg w-44 mt-2">
-              <li><button onClick={() => setActiveFilter("all")}>All Assets</button></li>
-              <li><button onClick={() => setActiveFilter("published")}>Published</button></li>
-              <li><button onClick={() => setActiveFilter("draft")}>Drafts</button></li>
-            </ul>
-          </div>
         </div>
       </div>
 

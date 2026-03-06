@@ -11,6 +11,7 @@ import {
 import { socialOptions } from "~/components/shared/SocialIcons";
 import { getQRCodeByUniqueId, incrementScans } from "~/services";
 import type { Route } from "./+types/public-card";
+import WelcomeScreen from "~/components/WelcomeScreen";
 
 export async function loader({ params }: Route.LoaderArgs) {
     if (!params.id) throw new Response("Not Found", { status: 404 });
@@ -113,48 +114,7 @@ export default function PublicCard() {
     const activeSocialLinks = Object.entries(socialLinks).filter(([_, val]) => val);
 
     if (showSplash) {
-        return (
-            <div className="min-h-screen bg-gray-100 flex flex-col items-center font-sans" data-theme="light">
-                <div
-                    className={`w-full h-screen max-w-sm flex flex-col items-center justify-center relative overflow-hidden transition-opacity duration-700 ${showSplash ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
-                    style={{ backgroundColor: primaryColor }}
-                >
-                    {qr.welcome_image ? (
-                        <div className="relative w-full h-full flex items-center justify-center">
-                            <img
-                                src={qr.welcome_image}
-                                alt="Welcome"
-                                className="w-full h-full object-cover"
-                            />
-                            {/* Subtle overlay for branding if needed */}
-                            <div className="absolute inset-0 bg-black/5" />
-                        </div>
-                    ) : (
-                        <div className="flex flex-col items-center justify-center">
-                            <div className="animate-bounce mb-8">
-                                {qr.profile_image ? (
-                                    <img
-                                        src={qr.profile_image}
-                                        alt="Welcome"
-                                        className="w-32 h-32 rounded-3xl border-4 border-white/30 object-cover shadow-2xl"
-                                    />
-                                ) : (
-                                    <div className="w-32 h-32 rounded-3xl bg-white/20 border-4 border-white/30 flex items-center justify-center shadow-2xl text-white">
-                                        <QrCodeIcon className="w-16 h-16 text-white" />
-                                    </div>
-                                )}
-                            </div>
-                            <p className="text-white/80 font-bold uppercase tracking-widest text-xs drop-shadow-sm">
-                                {displayName}
-                            </p>
-                            <div className="absolute bottom-12">
-                                <div className="loading loading-ring loading-lg opacity-50 text-white"></div>
-                            </div>
-                        </div>
-                    )}
-                </div>
-            </div>
-        );
+        return <WelcomeScreen qr={qr} showSplash={showSplash} primaryColor={primaryColor} displayName={displayName} />;
     }
 
     return (

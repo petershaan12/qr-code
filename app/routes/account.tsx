@@ -217,8 +217,8 @@ export default function Account() {
                         </div>
 
                         <div className="pt-2">
-                            <button type="submit" name="_action" value="update_password" className="btn btn-ghost border border-base-300 font-bold px-8 rounded-lg hover:bg-base-200">
-                                <Shield className="w-4 h-4 mr-2" />
+                            <button type="submit" name="_action" value="update_password" className="btn btn-ghost border border-black dark:border-white font-bold px-4 rounded-lg hover:bg-base-200">
+                                <Shield className="w-4 h-4 mr-1" />
                                 Update Password
                             </button>
                         </div>

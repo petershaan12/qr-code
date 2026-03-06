@@ -1,8 +1,9 @@
 import { useState, useRef } from "react";
-import { useLoaderData, Form } from "react-router";
-import { Plus, Trash2, Edit2, X, Check, Palette, Type, Save } from "lucide-react";
+import { useLoaderData, Form, useSearchParams } from "react-router";
+import { Plus, Trash2, Edit2, X, Check, Palette, Type, Save, AlertCircle } from "lucide-react";
 import { requireUser } from "~/.server/auth";
 import DashboardLayout from "~/components/DashboardLayout";
+import ThemeModal from "~/components/ThemeModal";
 import { getUserThemes, getUserById, createTheme, deleteTheme, updateTheme, getUserNotifications, createNotification } from "~/services";
 
 export async function loader({ request }: { request: Request }) {
@@ -66,25 +67,24 @@ export async function action({ request }: { request: Request }) {
 
 export default function Theme() {
   const { user, themes, notifications } = useLoaderData<any>();
+  const [searchParams] = useSearchParams();
+  const errorParam = searchParams.get("error");
   const modalRef = useRef<HTMLDialogElement>(null);
-  const editModalRef = useRef<HTMLDialogElement>(null);
   const [editingTheme, setEditingTheme] = useState<any>(null);
   const [welcomeImage, setWelcomeImage] = useState<string | null>(null);
-
-  const [createEnableWelcome, setCreateEnableWelcome] = useState<boolean>(true);
-  const [editEnableWelcome, setEditEnableWelcome] = useState<boolean>(true);
+  const [enableWelcome, setEnableWelcome] = useState<boolean>(true);
 
   const handleEdit = (theme: any) => {
     setEditingTheme(theme);
     setWelcomeImage(theme.welcome_image || null);
-    setEditEnableWelcome(theme.enable_welcome !== 0);
-    editModalRef.current?.showModal();
+    setEnableWelcome(theme.enable_welcome !== 0 && theme.enable_welcome !== false && theme.enable_welcome !== "false");
+    modalRef.current?.showModal();
   };
 
   const handleCreateNew = () => {
     setEditingTheme(null);
     setWelcomeImage(null);
-    setCreateEnableWelcome(true);
+    setEnableWelcome(true);
     modalRef.current?.showModal();
   };
 
@@ -104,6 +104,15 @@ export default function Theme() {
       user={user}
       notifications={notifications}
     >
+      {errorParam === "no_themes" && (
+        <div className="alert alert-warning shadow-sm font-bold rounded-lg border-warning/20 mb-2">
+          <AlertCircle className="w-5 h-5 animate-pulse" />
+          <div>
+            <p>You need to create at least one theme before creating a QR Code.</p>
+            <p className="text-xs font-medium opacity-50">Themes define the primary color and welcome screen of your profile.</p>
+          </div>
+        </div>
+      )}
       <div className="flex flex-col gap-6">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {themes.map((t: any) => (
@@ -159,259 +168,15 @@ export default function Theme() {
         </div>
       </div>
 
-      {/* Add Theme Modal */}
-      <dialog ref={modalRef} className="modal modal-bottom sm:modal-middle">
-        <div className="modal-box p-0 overflow-hidden border border-base-300 shadow-2xl rounded-lg bg-base-100">
-          <div className="px-6 py-4 flex items-center justify-between bg-base-200/50">
-            <div className="flex items-center gap-2">
-              <Palette className="w-5 h-5 text-primary" />
-              <h3 className="font-bold text-lg">Create New Theme</h3>
-            </div>
-            <form method="dialog">
-              <button className="btn btn-ghost btn-sm btn-circle"><X className="w-4 h-4" /></button>
-            </form>
-          </div>
-
-          <Form method="post" onSubmit={() => modalRef.current?.close()} className="px-6 pb-6 space-y-4 overflow-y-auto max-h-[calc(100vh-14rem)]">
-            <div className="form-control">
-              <label className="label py-1">
-                <span className="label-text font-bold text-base-content/70">Theme Name</span>
-              </label>
-              <div className="input input-bordered w-full flex items-center gap-3">
-                <Type className="w-4 h-4 text-base-content/30" />
-                <input name="name" type="text" className="grow font-medium" placeholder="E.g. Modern Red" required />
-              </div>
-            </div>
-
-            <div className="form-control">
-              <label className="label py-1">
-                <span className="label-text font-bold text-base-content/70">Primary Color</span>
-              </label>
-              <div className="flex gap-3">
-                <input
-                  type="color"
-                  name="primary_color"
-                  defaultValue="#dc2626"
-                  className="w-12 h-12 rounded-lg cursor-pointer border-2 border-base-300 p-1 bg-white"
-                />
-                <input
-                  type="text"
-                  placeholder="#dc2626"
-                  className="input input-bordered grow font-mono font-bold"
-                  defaultValue="#dc2626"
-                />
-              </div>
-            </div>
-
-            <div className="form-control">
-              <label className="label py-1">
-                <span className="label-text font-bold text-base-content/70">Legal Information</span>
-              </label>
-              <textarea
-                name="legal_info"
-                className="textarea textarea-bordered font-medium min-h-[80px] w-full flex"
-                placeholder="Copyright © 2026. All rights reserved."
-              ></textarea>
-            </div>
-            <div className="form-control">
-              <label className="label py-1">
-                <span className="label-text font-bold text-base-content/70">Welcome Duration (sec)</span>
-              </label>
-              <input
-                name="welcome_screen_time"
-                type="number"
-                min="0"
-                max="30"
-                defaultValue="5"
-                disabled={!createEnableWelcome}
-                className={`input input-bordered font-medium w-full ${!createEnableWelcome ? 'opacity-50 cursor-not-allowed' : ''}`}
-              />
-            </div>
-
-            <div className="form-control flex flex-row items-center justify-between py-2">
-              <span className="label-text font-bold text-base-content/70">Enable Welcome Screen</span>
-              <input
-                type="checkbox"
-                name="enable_welcome"
-                className="toggle toggle-primary"
-                checked={createEnableWelcome}
-                onChange={(e) => setCreateEnableWelcome(e.target.checked)}
-              />
-            </div>
-
-            <div className="form-control">
-              <label className="label py-1">
-                <span className="label-text font-bold text-base-content/70">Welcome Splash Image</span>
-              </label>
-              <div className="flex flex-col gap-2">
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={(e) => handleImageUpload(e, false)}
-                  disabled={!createEnableWelcome}
-                  className={`file-input file-input-bordered h-10 file-input-sm w-full font-medium ${!createEnableWelcome ? 'opacity-50 cursor-not-allowed' : ''}`}
-                />
-                {welcomeImage && (
-                  <div className="relative w-full aspect-video rounded-lg overflow-hidden border border-base-300 shadow-sm bg-base-200">
-                    <img src={welcomeImage} alt="Welcome Splash Preview" className="w-full h-full object-cover" />
-                    <button
-                      type="button"
-                      onClick={() => setWelcomeImage(null)}
-                      className="absolute top-2 right-2 btn btn-xs btn-circle btn-error shadow"
-                    >
-                      <X className="w-3 h-3" />
-                    </button>
-                  </div>
-                )}
-                <input type="hidden" name="welcome_image" value={welcomeImage || ""} />
-              </div>
-            </div>
-
-            <div className="modal-action pt-2">
-              <form method="dialog">
-                <button className="btn btn-ghost font-bold">Cancel</button>
-              </form>
-              <button type="submit" name="_action" value="create" className="btn-army px-6">
-                <Plus className="w-4 h-4" />
-                Create Theme
-              </button>
-            </div>
-          </Form>
-        </div>
-        <form method="dialog" className="modal-backdrop bg-base-content/20 backdrop-blur-[2px]">
-          <button>close</button>
-        </form>
-      </dialog>
-
-      {/* Edit Theme Modal */}
-      <dialog ref={editModalRef} className="modal modal-bottom sm:modal-middle">
-        <div className="modal-box p-0 overflow-hidden border border-base-300 shadow-2xl rounded-lg bg-base-100">
-          <div className="px-6 py-4 flex items-center justify-between bg-base-200/50">
-            <div className="flex items-center gap-2">
-              <Edit2 className="w-5 h-5 text-primary" />
-              <h3 className="font-bold text-lg">Edit Theme</h3>
-            </div>
-            <form method="dialog">
-              <button className="btn btn-ghost btn-sm btn-circle"><X className="w-4 h-4" /></button>
-            </form>
-          </div>
-
-          <Form method="post" onSubmit={() => editModalRef.current?.close()} className="px-6 pb-6 space-y-4 overflow-y-auto max-h-[calc(100vh-14rem)]">
-            <input type="hidden" name="id" value={editingTheme?.id} />
-            <div className="form-control">
-              <label className="label py-1">
-                <span className="label-text font-bold text-base-content/70">Theme Name</span>
-              </label>
-              <div className="input input-bordered w-full flex items-center gap-3">
-                <Type className="w-4 h-4 text-base-content/30" />
-                <input
-                  name="name"
-                  type="text"
-                  className="grow font-medium"
-                  defaultValue={editingTheme?.name}
-                  required
-                />
-              </div>
-            </div>
-
-            <div className="form-control">
-              <label className="label py-1">
-                <span className="label-text font-bold text-base-content/70">Primary Color</span>
-              </label>
-              <div className="flex gap-3">
-                <input
-                  type="color"
-                  name="primary_color"
-                  defaultValue={editingTheme?.primary_color}
-                  className="w-12 h-12 rounded-lg cursor-pointer border-2 border-base-300 p-1 bg-white"
-                />
-                <input
-                  type="text"
-                  className="input input-bordered w-full grow font-mono font-bold"
-                  defaultValue={editingTheme?.primary_color}
-                />
-              </div>
-            </div>
-
-            <div className="form-control">
-              <label className="label py-1">
-                <span className="label-text font-bold text-base-content/70">Legal Information</span>
-              </label>
-              <textarea
-                name="legal_info"
-                className="textarea textarea-bordered font-medium min-h-[80px] flex w-full"
-                defaultValue={editingTheme?.legal_info}
-              ></textarea>
-            </div>
-            <div className="form-control">
-              <label className="label py-1">
-                <span className="label-text font-bold text-base-content/70">Welcome Duration (sec)</span>
-              </label>
-              <input
-                name="welcome_screen_time"
-                type="number"
-                min="0"
-                max="30"
-                defaultValue={editingTheme?.welcome_screen_time || 5}
-                disabled={!editEnableWelcome}
-                className={`input input-bordered font-medium w-full ${!editEnableWelcome ? 'opacity-50 cursor-not-allowed' : ''}`}
-              />
-            </div>
-
-            <div className="form-control flex flex-row items-center justify-between py-2">
-              <span className="label-text font-bold text-base-content/70">Enable Welcome Screen</span>
-              <input
-                type="checkbox"
-                name="enable_welcome"
-                className="toggle toggle-primary"
-                checked={editEnableWelcome}
-                onChange={(e) => setEditEnableWelcome(e.target.checked)}
-              />
-            </div>
-
-            <div className="form-control">
-              <label className="label py-1">
-                <span className="label-text font-bold text-base-content/70">Welcome Splash Image</span>
-              </label>
-              <div className="flex flex-col gap-2">
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={(e) => handleImageUpload(e, true)}
-                  disabled={!editEnableWelcome}
-                  className={`file-input file-input-bordered h-10 file-input-sm w-full font-medium ${!editEnableWelcome ? 'opacity-50 cursor-not-allowed' : ''}`}
-                />
-                {welcomeImage && (
-                  <div className="relative w-full aspect-video rounded-lg overflow-hidden border border-base-300 shadow-sm bg-base-200">
-                    <img src={welcomeImage} alt="Welcome Splash Preview" className="w-full h-full object-cover" />
-                    <button
-                      type="button"
-                      onClick={() => setWelcomeImage(null)}
-                      className="absolute top-2 right-2 btn btn-xs btn-circle btn-error shadow"
-                    >
-                      <X className="w-3 h-3" />
-                    </button>
-                  </div>
-                )}
-                <input type="hidden" name="welcome_image" value={welcomeImage || ""} />
-              </div>
-            </div>
-
-            <div className="modal-action pt-2">
-              <form method="dialog">
-                <button className="btn btn-ghost font-bold">Cancel</button>
-              </form>
-              <button type="submit" name="_action" value="update" className="btn-army px-6 gap-2">
-                <Save className="w-4 h-4" />
-                Update Theme
-              </button>
-            </div>
-          </Form>
-        </div>
-        <form method="dialog" className="modal-backdrop bg-base-content/20 backdrop-blur-[2px]">
-          <button>close</button>
-        </form>
-      </dialog>
+      <ThemeModal
+        modalRef={modalRef}
+        editingTheme={editingTheme}
+        enableWelcome={enableWelcome}
+        setEnableWelcome={setEnableWelcome}
+        welcomeImage={welcomeImage}
+        setWelcomeImage={setWelcomeImage}
+        handleImageUpload={handleImageUpload}
+      />
     </DashboardLayout>
   );
 }

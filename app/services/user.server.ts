@@ -1,5 +1,6 @@
 import { getDb } from "~/.server/db";
 import { type UserData } from "~/types";
+import bcrypt from "bcryptjs";
 
 export async function findUserByEmail(email: string): Promise<any | null> {
   const db = getDb();
@@ -54,7 +55,7 @@ export async function updateUser(
   }
   if (data.password) {
     fields.push("password = ?");
-    values.push(data.password);
+    values.push(bcrypt.hashSync(data.password, 10));
   }
   if (data.avatar !== undefined) {
     fields.push("avatar = ?");
@@ -86,7 +87,7 @@ export async function createUser(data: {
     [
       data.name,
       data.email,
-      data.password || "password", // Default password for now
+      bcrypt.hashSync(data.password || "password", 10), // Hash password
       data.role || "user",
     ],
   );

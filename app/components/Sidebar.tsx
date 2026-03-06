@@ -12,7 +12,11 @@ import {
 } from "lucide-react";
 import { useUIStore } from "@/store/useStore";
 
-const Sidebar: React.FC = () => {
+interface SidebarProps {
+    user?: any;
+}
+
+const Sidebar: React.FC<SidebarProps> = ({ user }) => {
     const location = useLocation();
     const darkMode = useUIStore((state) => state.darkMode);
     const toggleDarkMode = useUIStore((state) => state.toggleDarkMode);
@@ -25,8 +29,11 @@ const Sidebar: React.FC = () => {
         { path: "/dashboard", label: "QR Codes", icon: QrCode },
         { path: "/create-qrcode", label: "Create QR Code", icon: Plus },
         { path: "/theme", label: "Themes", icon: Palette },
-        { path: "/users", label: "Users", icon: Users },
     ];
+
+    if (user?.role === "admin") {
+        menuItems.push({ path: "/users", label: "Users", icon: Users });
+    }
 
     return (
         <>

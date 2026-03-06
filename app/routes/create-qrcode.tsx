@@ -26,6 +26,11 @@ import { type PhoneInput, type QRCodeFormData as FormData } from "~/types";
 export async function loader({ request }: { request: Request }) {
   const userId = await requireUser(request);
   const themes = await getUserThemes(userId);
+
+  if (themes.length === 0) {
+    return redirect("/theme?error=no_themes");
+  }
+
   const user = await getUserById(userId);
   const notifications = await getUserNotifications(userId);
   return { themes, user, notifications };
